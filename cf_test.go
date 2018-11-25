@@ -105,6 +105,7 @@ func setupMultipleWithRedirect(mockEndpoints []MockRouteWithRedirect, t *testing
 	m := martini.New()
 	m.Use(render.Renderer())
 	r := martini.NewRouter()
+	var calledMocks []MockRouteWithRedirect
 	for _, mock := range mockEndpoints {
 		method := mock.Method
 		endpoint := mock.Endpoint
@@ -116,6 +117,7 @@ func setupMultipleWithRedirect(mockEndpoints []MockRouteWithRedirect, t *testing
 		redirectLocation := mock.RedirectLocation
 		if method == "GET" {
 			r.Get(endpoint, func(res http.ResponseWriter, req *http.Request) (int, string) {
+				calledMocks = append(calledMocks, mock)
 				testUserAgent(req.Header.Get("User-Agent"), userAgent, t)
 				testQueryString(req.URL.RawQuery, queryString, t)
 				if redirectLocation != "" {
@@ -125,6 +127,7 @@ func setupMultipleWithRedirect(mockEndpoints []MockRouteWithRedirect, t *testing
 			})
 		} else if method == "POST" {
 			r.Post(endpoint, func(req *http.Request) (int, string) {
+				calledMocks = append(calledMocks, mock)
 				testUserAgent(req.Header.Get("User-Agent"), userAgent, t)
 				testQueryString(req.URL.RawQuery, queryString, t)
 				testReqBody(req, postFormBody, t)
@@ -132,12 +135,14 @@ func setupMultipleWithRedirect(mockEndpoints []MockRouteWithRedirect, t *testing
 			})
 		} else if method == "DELETE" {
 			r.Delete(endpoint, func(req *http.Request) (int, string) {
+				calledMocks = append(calledMocks, mock)
 				testUserAgent(req.Header.Get("User-Agent"), userAgent, t)
 				testQueryString(req.URL.RawQuery, queryString, t)
 				return status, output
 			})
 		} else if method == "PUT" {
 			r.Put(endpoint, func(req *http.Request) (int, string) {
+				calledMocks = append(calledMocks, mock)
 				testUserAgent(req.Header.Get("User-Agent"), userAgent, t)
 				testQueryString(req.URL.RawQuery, queryString, t)
 				testReqBody(req, postFormBody, t)
@@ -145,6 +150,7 @@ func setupMultipleWithRedirect(mockEndpoints []MockRouteWithRedirect, t *testing
 			})
 		} else if method == "PATCH" {
 			r.Patch(endpoint, func(req *http.Request) (int, string) {
+				calledMocks = append(calledMocks, mock)
 				testUserAgent(req.Header.Get("User-Agent"), userAgent, t)
 				testQueryString(req.URL.RawQuery, queryString, t)
 				testReqBody(req, postFormBody, t)
@@ -152,6 +158,7 @@ func setupMultipleWithRedirect(mockEndpoints []MockRouteWithRedirect, t *testing
 			})
 		} else if method == "PUT-FILE" {
 			r.Put(endpoint, func(req *http.Request) (int, string) {
+				calledMocks = append(calledMocks, mock)
 				testUserAgent(req.Header.Get("User-Agent"), userAgent, t)
 				testBodyContains(req, postFormBody, t)
 				return status, output
@@ -182,6 +189,21 @@ func setupMultipleWithRedirect(mockEndpoints []MockRouteWithRedirect, t *testing
 
 	m.Action(r.Handle)
 	mux.Handle("/", m)
+
+	for _, mock := range mockEndpoints {
+		if !wasCalled(calledMocks, mock) {
+			t.Errorf("Mock route %v was configured but never called", mock)
+		}
+	}
+}
+
+func wasCalled(calledMocks []MockRouteWithRedirect, mock MockRouteWithRedirect) bool {
+	for _, calledMock := range calledMocks {
+		if calledMock == mock {
+			return true
+		}
+	}
+	return false
 }
 
 func FakeUAAServer(expiresIn int) *httptest.Server {
